@@ -42,14 +42,12 @@ func TracingMiddleware() gin.HandlerFunc {
 			span = &Span{TraceID: traceID, SpanID: spanID}
 		} else {
 			span = NewSpan()
+			c.Request.Header.Set("X-Trace-ID", span.TraceID)
+			c.Request.Header.Set("X-Span-ID", span.SpanID)
 		}
 
 		ctx := NewContext(c.Request.Context(), span)
 		c.Request = c.Request.WithContext(ctx)
-
-		// 요청에 Trace ID와 Span ID 헤더 추가
-		c.Request.Header.Set("X-Trace-ID", span.TraceID)
-		c.Request.Header.Set("X-Span-ID", span.SpanID)
 
 		start := time.Now()
 		c.Next()
@@ -57,5 +55,9 @@ func TracingMiddleware() gin.HandlerFunc {
 
 		log.Printf("TraceID: %s, SpanID: %s, Method: %s, Path: %s, Duration: %s, Status: %d",
 			span.TraceID, span.SpanID, c.Request.Method, c.Request.URL.Path, duration, c.Writer.Status())
+
+		// 트레이스 정보를 응답 헤더에 포함
+		c.Writer.Header().Set("X-Trace-ID", span.TraceID)
+		c.Writer.Header().Set("X-Span-ID", span.SpanID)
 	}
 }
