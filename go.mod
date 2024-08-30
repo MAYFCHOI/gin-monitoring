@@ -1,4 +1,4 @@
-module gin-monitoring
+module github.com/MAYFCHOI/gin-monitoring
 
 go 1.21.5
 
