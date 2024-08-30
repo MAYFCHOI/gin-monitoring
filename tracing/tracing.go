@@ -32,16 +32,29 @@ func NewContext(ctx context.Context, span *Span) context.Context {
 	return context.WithValue(ctx, traceContextKey{}, span)
 }
 
-// 분산 추적 미들웨어
 func TracingMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		span := NewSpan()
+		traceID := c.Request.Header.Get("X-Trace-ID")
+		spanID := c.Request.Header.Get("X-Span-ID")
+
+		var span *Span
+		if traceID != "" && spanID != "" {
+			span = &Span{TraceID: traceID, SpanID: spanID}
+		} else {
+			span = NewSpan()
+		}
+
 		ctx := NewContext(c.Request.Context(), span)
 		c.Request = c.Request.WithContext(ctx)
+
+		// 요청에 Trace ID와 Span ID 헤더 추가
+		c.Request.Header.Set("X-Trace-ID", span.TraceID)
+		c.Request.Header.Set("X-Span-ID", span.SpanID)
 
 		start := time.Now()
 		c.Next()
 		duration := time.Since(start)
+
 		log.Printf("TraceID: %s, SpanID: %s, Method: %s, Path: %s, Duration: %s, Status: %d",
 			span.TraceID, span.SpanID, c.Request.Method, c.Request.URL.Path, duration, c.Writer.Status())
 	}
