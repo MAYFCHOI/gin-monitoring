@@ -8,38 +8,47 @@ import (
 )
 
 var (
+	serviceName string
+)
+
+var (
 	requestCount       = make(map[string]int)
 	requestDuration    = make(map[string]time.Duration)
 	requestStatusCodes = make(map[string]map[int]int)
 	mu                 sync.Mutex
 )
 
-// 메트릭을 기록하는 함수
-func recordMetrics(method, endpoint string, duration time.Duration, status int) {
+type MetricInit struct {
+	ServiceName string
+}
+
+// recordMetrics는 메트릭을 기록합니다.
+func recordMetrics(method, endpoint string, duration time.Duration, status int, serviceName string) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	// 요청 수 증가
-	requestCount[method+endpoint]++
+	key := method + endpoint
+	requestCount[key]++
 
 	// 요청 지연 시간 추가
-	requestDuration[method+endpoint] += duration
+	requestDuration[key] += duration
 
 	// 상태 코드 수 증가
-	if _, exists := requestStatusCodes[method+endpoint]; !exists {
-		requestStatusCodes[method+endpoint] = make(map[int]int)
+	if _, exists := requestStatusCodes[key]; !exists {
+		requestStatusCodes[key] = make(map[int]int)
 	}
-	requestStatusCodes[method+endpoint][status]++
+	requestStatusCodes[key][status]++
 }
 
-// 메트릭 핸들러
+// MetricsHandler는 메트릭을 제공하고 초기화합니다.
 func MetricsHandler(c *gin.Context) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	metricsData := make(map[string]interface{})
 	for endpoint, count := range requestCount {
-		avgDuration := requestDuration[endpoint].Seconds() / float64(count)
+		avgDuration := float64(requestDuration[endpoint].Milliseconds()) / float64(count)
 		metricsData[endpoint] = map[string]interface{}{
 			"count":        count,
 			"avg_duration": avgDuration,
@@ -47,11 +56,19 @@ func MetricsHandler(c *gin.Context) {
 		}
 	}
 
-	c.JSON(200, metricsData)
+	response := map[string]interface{}{
+		"service_name": serviceName,
+		"metrics":      metricsData,
+	}
+
+	c.JSON(200, response)
 }
 
-func MetricsMiddleware() gin.HandlerFunc {
+// MetricsMiddleware는 서비스 이름을 인자로 받는 미들웨어를 생성합니다.
+func MetricsMiddleware(init MetricInit) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		serviceName = init.ServiceName
+
 		start := time.Now()
 
 		c.Next()
@@ -60,9 +77,9 @@ func MetricsMiddleware() gin.HandlerFunc {
 		status := c.Writer.Status()
 		endpoint := c.FullPath()
 		if endpoint == "" {
-			endpoint = "unknown"
+			endpoint = "/unknown"
 		}
 
-		recordMetrics(c.Request.Method, endpoint, duration, status)
+		recordMetrics(c.Request.Method, endpoint, duration, status, serviceName)
 	}
 }

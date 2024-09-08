@@ -3,6 +3,7 @@ package tracing
 import (
 	"context"
 	"log"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -12,14 +13,21 @@ import (
 type traceContextKey struct{}
 
 type Span struct {
-	TraceID string
-	SpanID  string
+	TraceID    string
+	SpanID     string
+	ParentSpan *Span
 }
 
-func NewSpan() *Span {
+type TraceInit struct {
+	ServiceName string
+	Logpath     string
+}
+
+func NewSpan(traceID string, parent *Span) *Span {
 	return &Span{
-		TraceID: uuid.New().String(),
-		SpanID:  uuid.New().String(),
+		TraceID:    traceID,
+		SpanID:     uuid.New().String(),
+		ParentSpan: parent,
 	}
 }
 
@@ -32,16 +40,26 @@ func NewContext(ctx context.Context, span *Span) context.Context {
 	return context.WithValue(ctx, traceContextKey{}, span)
 }
 
-func TracingMiddleware() gin.HandlerFunc {
+func TracingMiddleware(init TraceInit) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		file, err := os.OpenFile(init.Logpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		log.SetOutput(file)
+		log.SetFlags(log.Ldate | log.Ltime | log.LUTC)
+		if err != nil {
+			log.Fatalf("Failed to open log file: %v", err)
+		}
+
 		traceID := c.Request.Header.Get("X-Trace-ID")
 		spanID := c.Request.Header.Get("X-Span-ID")
 
 		var span *Span
+		var parentSpan *Span
+
 		if traceID != "" && spanID != "" {
-			span = &Span{TraceID: traceID, SpanID: spanID}
+			parentSpan = &Span{TraceID: traceID, SpanID: spanID}
+			span = NewSpan(traceID, parentSpan)
 		} else {
-			span = NewSpan()
+			span = NewSpan(uuid.New().String(), nil)
 			c.Request.Header.Set("X-Trace-ID", span.TraceID)
 			c.Request.Header.Set("X-Span-ID", span.SpanID)
 		}
@@ -53,11 +71,17 @@ func TracingMiddleware() gin.HandlerFunc {
 		c.Next()
 		duration := time.Since(start)
 
-		log.Printf("TraceID: %s, SpanID: %s, Method: %s, Path: %s, Duration: %s, Status: %d",
-			span.TraceID, span.SpanID, c.Request.Method, c.Request.URL.Path, duration, c.Writer.Status())
+		log.Printf("Service: %s", "TraceID: %s, SpanID: %s, ParentSpanID: %s, Method: %s, Path: %s, Duration: %s, Status: %d",
+			init.ServiceName, span.TraceID, span.SpanID, parentSpanID(span), c.Request.Method, c.Request.URL.Path, duration, c.Writer.Status())
 
-		// 트레이스 정보를 응답 헤더에 포함
 		c.Writer.Header().Set("X-Trace-ID", span.TraceID)
 		c.Writer.Header().Set("X-Span-ID", span.SpanID)
 	}
+}
+
+func parentSpanID(span *Span) string {
+	if span != nil && span.ParentSpan != nil {
+		return span.ParentSpan.SpanID
+	}
+	return ""
 }
