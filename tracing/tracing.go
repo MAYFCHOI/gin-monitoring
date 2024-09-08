@@ -71,8 +71,8 @@ func TracingMiddleware(init TraceInit) gin.HandlerFunc {
 		c.Next()
 		duration := time.Since(start)
 
-		log.Printf("Service: %s, TraceID: %s, SpanID: %s, ParentSpanID: %s, Method: %s, Path: %s, Duration: %d, Status: %d",
-			init.ServiceName, span.TraceID, span.SpanID, parentSpanID(span), c.Request.Method, c.Request.URL.Path, duration.Milliseconds(), c.Writer.Status())
+		log.Printf("Service: %s, TraceID: %s, SpanID: %s, ParentSpanID: %s, Method: %s, Path: %s, Duration: %s, Status: %d",
+			init.ServiceName, span.TraceID, span.SpanID, parentSpanID(span), c.Request.Method, c.Request.URL.Path, duration.String(), c.Writer.Status())
 
 		c.Writer.Header().Set("X-Trace-ID", span.TraceID)
 		c.Writer.Header().Set("X-Span-ID", span.SpanID)
