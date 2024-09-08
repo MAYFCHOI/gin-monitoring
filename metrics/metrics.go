@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MAYFCHOI/gin-monitoring/config"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,10 +18,6 @@ var (
 	requestStatusCodes = make(map[string]map[int]int)
 	mu                 sync.Mutex
 )
-
-type MetricInit struct {
-	ServiceName string
-}
 
 // recordMetrics는 메트릭을 기록합니다.
 func recordMetrics(method, endpoint string, duration time.Duration, status int, serviceName string) {
@@ -65,7 +62,7 @@ func MetricsHandler(c *gin.Context) {
 }
 
 // MetricsMiddleware는 서비스 이름을 인자로 받는 미들웨어를 생성합니다.
-func MetricsMiddleware(init MetricInit) gin.HandlerFunc {
+func MetricsMiddleware(init config.GinMonitorInit) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		serviceName = init.ServiceName
 

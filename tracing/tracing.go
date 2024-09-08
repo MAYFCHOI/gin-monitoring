@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/MAYFCHOI/gin-monitoring/config"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -16,11 +17,6 @@ type Span struct {
 	TraceID    string
 	SpanID     string
 	ParentSpan *Span
-}
-
-type TraceInit struct {
-	ServiceName string
-	Logpath     string
 }
 
 func NewSpan(traceID string, parent *Span) *Span {
@@ -40,7 +36,7 @@ func NewContext(ctx context.Context, span *Span) context.Context {
 	return context.WithValue(ctx, traceContextKey{}, span)
 }
 
-func TracingMiddleware(init TraceInit) gin.HandlerFunc {
+func TracingMiddleware(init config.GinMonitorInit) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		file, err := os.OpenFile(init.Logpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		log.SetOutput(file)
